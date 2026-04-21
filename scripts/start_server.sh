@@ -6,4 +6,4 @@ source "$SCRIPT_DIR/common.sh"
 
 echo "[start_server] starting observer server from $ROOT_DIR"
 cd "$ROOT_DIR"
-"$(python_bin)" -m pi.server.app
+"$(python_bin)" -u -m pi.server.app

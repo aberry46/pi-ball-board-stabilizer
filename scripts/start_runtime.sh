@@ -6,4 +6,4 @@ source "$SCRIPT_DIR/common.sh"
 
 echo "[start_runtime] starting Pi runtime from $ROOT_DIR"
 cd "$ROOT_DIR"
-"$(python_bin)" -m pi.runtime.main
+"$(python_bin)" -u -m pi.runtime.main

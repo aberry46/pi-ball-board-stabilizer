@@ -12,13 +12,13 @@ echo "[start_all_pi] stopping stale processes first"
 bash "$ROOT_DIR/scripts/stop_all_pi.sh"
 
 echo "[start_all_pi] launching runtime in background"
-nohup "$PYTHON_BIN" -m pi.runtime.main > "$ROOT_DIR/.run/runtime.log" 2>&1 &
+nohup "$PYTHON_BIN" -u -m pi.runtime.main > "$ROOT_DIR/.run/runtime.log" 2>&1 &
 echo $! > "$ROOT_DIR/.run/runtime.pid"
 
 sleep 2
 
 echo "[start_all_pi] launching observer server in background"
-nohup "$PYTHON_BIN" -m pi.server.app > "$ROOT_DIR/.run/server.log" 2>&1 &
+nohup "$PYTHON_BIN" -u -m pi.server.app > "$ROOT_DIR/.run/server.log" 2>&1 &
 echo $! > "$ROOT_DIR/.run/server.pid"
 
 echo "[start_all_pi] done"
