@@ -174,11 +174,6 @@ class RuntimeApp:
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
             return ControlOutput(tilt_x, tilt_y, self.last_command)
 
-        if now - self.last_good_target_time <= self.config.lost_track_grace_s:
-            previous = self.snapshot_store.get().control
-            self.last_command = self.arduino.send_tilt(previous.tilt_x, previous.tilt_y)
-            return ControlOutput(previous.tilt_x, previous.tilt_y, self.last_command)
-
         self.last_command = self.arduino.send_center()
         return ControlOutput(0.0, 0.0, self.last_command)
 
