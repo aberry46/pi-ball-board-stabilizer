@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    config = RuntimeConfig()
+    config = RuntimeConfig.load()
     camera = MjpegCamera(config)
     calibrator = BoardCalibrator(config)
     tracker = RedBallTracker(config)

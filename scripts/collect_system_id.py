@@ -49,7 +49,7 @@ def sample_ball(camera: MjpegCamera, tracker: RedBallTracker, board: BoardCalibr
 
 def main() -> int:
     args = parse_args()
-    config = RuntimeConfig()
+    config = RuntimeConfig.load()
     amplitudes = [float(part) for part in args.amplitudes.split(",") if part.strip()]
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
