@@ -27,6 +27,7 @@ HTML = """
     .stat { display:flex; justify-content:space-between; padding:10px 0; border-top:1px solid #e5ddcf; }
     .stat:first-child { border-top:0; }
     .muted { color:#6b655c; }
+    .alert { color:#8a2f1f; font-weight:600; }
     .panel-stack { display:grid; gap:20px; }
     .coach-title { margin:0 0 8px 0; font-size:26px; }
     .coach-step { border-top:1px solid #e5ddcf; padding:10px 0; }
@@ -207,10 +208,13 @@ HTML = """
         return;
       }
       const snap = payload.snapshot;
-      document.getElementById('mode').textContent = snap.mode;
-      document.getElementById('runtime-state').textContent = snap.mode;
+      const ballLostWhileRunning = snap.mode === 'RUNNING' && !snap.ball.found;
+      const visibleMode = ballLostWhileRunning ? 'BALL LOST' : snap.mode;
+      document.getElementById('mode').textContent = visibleMode;
+      document.getElementById('mode').className = ballLostWhileRunning ? 'card alert' : 'card';
+      document.getElementById('runtime-state').textContent = visibleMode;
       document.getElementById('controller-mode').textContent = snap.controller_mode || 'legacy';
-      document.getElementById('ball-found').textContent = snap.ball.found ? 'Yes' : 'No';
+      document.getElementById('ball-found').textContent = snap.ball.found ? 'Yes' : (ballLostWhileRunning ? 'Lost During Run' : 'No');
       document.getElementById('ball-pos').textContent = fmtPair(snap.ball.center_norm, 3);
       document.getElementById('ball-vel').textContent = fmtPair(snap.ball.velocity_norm, 2);
       document.getElementById('ball-conf').textContent = Number(snap.ball.confidence || 0).toFixed(2);
@@ -223,8 +227,8 @@ HTML = """
       document.getElementById('calibration').textContent = `${Math.round((snap.board.progress || 0) * 100)}%`;
       document.getElementById('raw').src = snap.raw_frame_b64 ? `data:image/jpeg;base64,${snap.raw_frame_b64}` : '';
       document.getElementById('mask').src = snap.mask_frame_b64 ? `data:image/jpeg;base64,${snap.mask_frame_b64}` : '';
-      document.getElementById('raw-note').textContent = snap.raw_frame_b64 ? '' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : '');
-      document.getElementById('mask-note').textContent = snap.mask_frame_b64 ? '' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : '');
+      document.getElementById('raw-note').textContent = snap.raw_frame_b64 ? '' : (ballLostWhileRunning ? 'Ball lost. Press Ball Fell Off to reset quickly.' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : ''));
+      document.getElementById('mask-note').textContent = snap.mask_frame_b64 ? '' : (ballLostWhileRunning ? 'Ball lost. Place the ball back and reset the run.' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : ''));
       updateCoach(snap);
       refreshDelayMs = snap.mode === 'RUNNING' ? 150 : 250;
       scheduleRefresh(refreshDelayMs);
