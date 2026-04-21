@@ -36,8 +36,8 @@ class RuntimeConfig:
     catch_multiplier: float = 1.10
     lost_track_grace_s: float = 0.35
 
-    swap_control_axes: bool = True
-    invert_control_x: bool = True
+    swap_control_axes: bool = False
+    invert_control_x: bool = False
     invert_control_y: bool = True
 
     serial_port: str = "/dev/ttyACM1"
