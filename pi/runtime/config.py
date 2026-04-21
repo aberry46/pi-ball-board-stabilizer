@@ -31,13 +31,13 @@ class RuntimeConfig:
     kd_x: float = 0.16
     kd_y: float = 0.16
     max_tilt: float = 0.65
-    min_tilt: float = 0.14
+    min_tilt: float = 0.18
     deadband: float = 0.01
     integral_limit: float = 6.0
     lookahead_time_s: float = 0.12
-    low_speed_threshold: float = 0.12
-    low_speed_error_threshold: float = 0.08
-    low_speed_tilt_boost: float = 0.18
+    low_speed_threshold: float = 0.16
+    low_speed_error_threshold: float = 0.06
+    low_speed_tilt_boost: float = 0.26
     catch_velocity_threshold: float = 0.75
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0
