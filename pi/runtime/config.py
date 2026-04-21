@@ -35,6 +35,9 @@ class RuntimeConfig:
     deadband: float = 0.01
     integral_limit: float = 6.0
     lookahead_time_s: float = 0.12
+    low_speed_threshold: float = 0.08
+    low_speed_error_threshold: float = 0.10
+    low_speed_tilt_boost: float = 0.10
     catch_velocity_threshold: float = 0.75
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0

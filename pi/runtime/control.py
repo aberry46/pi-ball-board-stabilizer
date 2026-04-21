@@ -67,6 +67,11 @@ class Controller:
         if abs(predicted_error_y) >= self.config.catch_error_threshold or abs(vy) >= self.config.catch_velocity_threshold:
             tilt_y *= self.config.catch_multiplier
 
+        if abs(vx) <= self.config.low_speed_threshold and abs(error_x) >= self.config.low_speed_error_threshold:
+            tilt_x += sign(error_x) * self.config.low_speed_tilt_boost
+        if abs(vy) <= self.config.low_speed_threshold and abs(error_y) >= self.config.low_speed_error_threshold:
+            tilt_y += sign(error_y) * self.config.low_speed_tilt_boost
+
         if abs(tilt_x) < self.config.deadband:
             tilt_x = 0.0
         if abs(tilt_y) < self.config.deadband:
