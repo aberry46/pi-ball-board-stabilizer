@@ -24,16 +24,17 @@ class RuntimeConfig:
     max_blob_area_ratio: float = 0.09
     min_confidence: float = 0.20
 
-    kp_x: float = 1.10
-    kp_y: float = 1.10
-    ki_x: float = 0.012
-    ki_y: float = 0.012
-    kd_x: float = 0.06
-    kd_y: float = 0.06
-    max_tilt: float = 0.75
-    min_tilt: float = 0.12
+    kp_x: float = 1.00
+    kp_y: float = 1.00
+    ki_x: float = 0.010
+    ki_y: float = 0.010
+    kd_x: float = 0.16
+    kd_y: float = 0.16
+    max_tilt: float = 0.65
+    min_tilt: float = 0.08
     deadband: float = 0.01
-    integral_limit: float = 8.0
+    integral_limit: float = 6.0
+    lookahead_time_s: float = 0.12
     catch_velocity_threshold: float = 0.75
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0
@@ -46,6 +47,7 @@ class RuntimeConfig:
     serial_port: str = "/dev/ttyACM1"
     serial_baud: int = 115200
     serial_timeout_s: float = 0.1
+    command_keepalive_s: float = 0.20
 
     ipc_host: str = "127.0.0.1"
     ipc_port: int = 8765

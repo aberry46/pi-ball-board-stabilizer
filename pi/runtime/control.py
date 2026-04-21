@@ -30,6 +30,8 @@ class Controller:
     def compute(self, x: float, y: float, vx: float, vy: float) -> tuple[float, float]:
         error_x = 0.5 - x
         error_y = 0.5 - y
+        predicted_error_x = error_x - self.config.lookahead_time_s * vx
+        predicted_error_y = error_y - self.config.lookahead_time_s * vy
 
         if abs(error_x) < self.config.deadband:
             self.integral_x = 0.0
@@ -50,19 +52,19 @@ class Controller:
             )
 
         tilt_x = (
-            self.config.kp_x * error_x
+            self.config.kp_x * predicted_error_x
             + self.config.ki_x * self.integral_x
             - self.config.kd_x * vx
         )
         tilt_y = (
-            self.config.kp_y * error_y
+            self.config.kp_y * predicted_error_y
             + self.config.ki_y * self.integral_y
             - self.config.kd_y * vy
         )
 
-        if abs(error_x) >= self.config.catch_error_threshold or abs(vx) >= self.config.catch_velocity_threshold:
+        if abs(predicted_error_x) >= self.config.catch_error_threshold or abs(vx) >= self.config.catch_velocity_threshold:
             tilt_x *= self.config.catch_multiplier
-        if abs(error_y) >= self.config.catch_error_threshold or abs(vy) >= self.config.catch_velocity_threshold:
+        if abs(predicted_error_y) >= self.config.catch_error_threshold or abs(vy) >= self.config.catch_velocity_threshold:
             tilt_y *= self.config.catch_multiplier
 
         if abs(tilt_x) < self.config.deadband:
