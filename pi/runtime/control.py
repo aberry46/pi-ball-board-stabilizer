@@ -27,7 +27,10 @@ class Controller:
         self.integral_x = 0.0
         self.integral_y = 0.0
 
-    def compute(self, x: float, y: float, vx: float, vy: float) -> tuple[float, float]:
+    def compute(self, x: float, y: float, vx: float, vy: float, *, ignore_velocity: bool = False) -> tuple[float, float]:
+        if ignore_velocity:
+            vx = 0.0
+            vy = 0.0
         error_x = 0.5 - x
         error_y = 0.5 - y
         predicted_error_x = error_x - self.config.lookahead_time_s * vx

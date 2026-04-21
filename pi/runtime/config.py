@@ -44,6 +44,12 @@ class RuntimeConfig:
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0
     lost_track_grace_s: float = 0.10
+    post_reacquire_warmup_s: float = 0.20
+    control_bias_window: int = 18
+    control_bias_min_mean: float = 0.22
+    control_bias_dominance_ratio: float = 1.35
+    control_bias_worsening_margin: float = 0.03
+    control_recovery_neutral_s: float = 0.25
 
     swap_control_axes: bool = True
     invert_control_x: bool = False
@@ -57,12 +63,13 @@ class RuntimeConfig:
     controller_mode: str = "legacy"
     nn_history_steps: int = 8
     nn_dynamics_horizon: int = 5
-    nn_policy_artifact_path: Path = Path("artifacts/nn/policy_model.npz")
+    nn_policy_artifact_path: Path = Path("artifacts/nn/policy_model_active.npz")
     nn_dynamics_artifact_path: Path = Path("artifacts/nn/dynamics_model.npz")
     nn_normalization_path: Path = Path("artifacts/nn/normalization.json")
     nn_max_inference_ms: float = 20.0
     nn_min_ball_confidence: float = 0.75
     nn_near_edge_margin: float = 0.08
+    edge_touch_dead_margin: float = 0.03
     nn_assist_blend: float = 0.35
     nn_assist_max_delta: float = 0.18
     nn_primary_max_delta: float = 0.35

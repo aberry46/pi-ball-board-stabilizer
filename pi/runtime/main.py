@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 import time
 from typing import Any
 
@@ -42,6 +43,18 @@ class RuntimeApp:
         self.last_mask_frame_b64: str | None = None
         self.last_detected_ball = BallEstimate()
         self.trace_logger = ControlTraceLogger(config.control_log_dir)
+        self.recovery_until = 0.0
+        self.recovery_reason = ""
+        self.reacquire_until = 0.0
+        self.was_ball_found = False
+        self.recent_control_window: deque[tuple[float, float, float]] = deque(maxlen=config.control_bias_window)
+
+    def _edge_touch_dead(self, ball: BallEstimate) -> bool:
+        if not ball.found or ball.center_norm is None:
+            return False
+        x, y = ball.center_norm
+        margin = self.config.edge_touch_dead_margin
+        return x <= margin or x >= (1.0 - margin) or y <= margin or y >= (1.0 - margin)
 
     def run(self) -> None:
         self.ipc.start()
@@ -87,8 +100,13 @@ class RuntimeApp:
                 if self.board.initialized:
                     self._draw_board(display_frame)
                     ball, mask_frame = self.tracker.detect(frame, self.board)
+                    if self.mode == RuntimeMode.RUNNING and self._edge_touch_dead(ball):
+                        ball = BallEstimate()
                     if ball.found and ball.center_norm is not None:
                         self.last_detected_ball = ball
+                        if not self.was_ball_found:
+                            self.reacquire_until = now + self.config.post_reacquire_warmup_s
+                    self.was_ball_found = ball.found
 
                 if self.mode == RuntimeMode.RUNNING and self.board.initialized:
                     control, neural = self._update_control(ball, dt)
@@ -141,32 +159,80 @@ class RuntimeApp:
             return
         if action == "RUN":
             self.mode = RuntimeMode.RUNNING if self.board.initialized else RuntimeMode.CALIBRATING
-            self.controller.reset()
-            self.neural.reset()
+            self._reset_control_state("run")
             if self.last_detected_ball.found and self.last_detected_ball.center_norm is not None:
                 self.last_good_target_time = time.time()
             print("Command: RUN")
         elif action == "PAUSE":
             self.mode = RuntimeMode.PAUSED
-            self.controller.reset()
-            self.neural.reset()
+            self._reset_control_state("pause")
             self.last_command = self.arduino.send_center()
             print("Command: PAUSE")
         elif action == "STOP":
             self.mode = RuntimeMode.STOPPED
-            self.controller.reset()
-            self.neural.reset()
+            self._reset_control_state("stop")
             self.last_command = self.arduino.send_center()
             print("Command: STOP")
         elif action == "RECALIBRATE":
             self.mode = RuntimeMode.CALIBRATING
-            self.controller.reset()
-            self.neural.reset()
+            self._reset_control_state("recalibrate")
             self.calibrator.reset()
             self.tracker.reset()
             self.board = BoardCalibration(safety_margin_ratio=self.config.safety_margin_ratio)
             self.last_command = self.arduino.send_center()
             print("Command: RECALIBRATE")
+        elif action == "BALL_FELL_OFF":
+            self.mode = RuntimeMode.STOPPED
+            self._reset_control_state("ball_fell_off", reset_tracker=True)
+            self.last_detected_ball = BallEstimate()
+            self.last_good_target_time = 0.0
+            self.last_command = self.arduino.send_center()
+            print("Command: BALL_FELL_OFF")
+
+    def _reset_control_state(self, reason: str, *, reset_tracker: bool = False) -> None:
+        self.controller.reset()
+        self.neural.reset()
+        self.recent_control_window.clear()
+        self.recovery_until = 0.0
+        self.recovery_reason = ""
+        self.reacquire_until = 0.0
+        self.was_ball_found = False
+        if reset_tracker:
+            self.tracker.reset()
+        print(f"Control state reset: {reason}")
+
+    def _trigger_soft_recovery(self, reason: str) -> None:
+        self.controller.reset()
+        self.neural.reset()
+        self.recent_control_window.clear()
+        self.recovery_until = time.time() + self.config.control_recovery_neutral_s
+        self.recovery_reason = reason
+        print(f"Soft recovery triggered: {reason}")
+
+    def _should_trigger_bias_recovery(self) -> bool:
+        window = list(self.recent_control_window)
+        if len(window) < max(6, self.config.control_bias_window):
+            return False
+
+        distances = [entry[2] for entry in window]
+        midpoint = len(window) // 2
+        early_mean = sum(distances[:midpoint]) / max(1, midpoint)
+        late_mean = sum(distances[midpoint:]) / max(1, len(window) - midpoint)
+        if late_mean <= early_mean + self.config.control_bias_worsening_margin:
+            return False
+
+        mean_x = sum(entry[0] for entry in window) / len(window)
+        mean_y = sum(entry[1] for entry in window) / len(window)
+        mean_abs_x = sum(abs(entry[0]) for entry in window) / len(window)
+        mean_abs_y = sum(abs(entry[1]) for entry in window) / len(window)
+
+        dominant_abs = max(mean_abs_x, mean_abs_y)
+        if dominant_abs < self.config.control_bias_min_mean:
+            return False
+
+        if mean_abs_x >= mean_abs_y:
+            return abs(mean_x) >= self.config.control_bias_min_mean and mean_abs_x >= mean_abs_y * self.config.control_bias_dominance_ratio
+        return abs(mean_y) >= self.config.control_bias_min_mean and mean_abs_y >= mean_abs_x * self.config.control_bias_dominance_ratio
 
     def _set_fault(self, message: str) -> None:
         self.mode = RuntimeMode.FAULT
@@ -180,16 +246,40 @@ class RuntimeApp:
 
     def _update_control(self, ball: BallEstimate, dt: float) -> tuple[ControlOutput, NeuralTelemetry]:
         now = time.time()
+        if now < self.recovery_until:
+            self.last_command = self.arduino.send_center()
+            telemetry = NeuralTelemetry(
+                enabled=self.controller_mode != "legacy",
+                mode=self.controller_mode,
+                model_loaded=self.neural.model_loaded,
+                fallback_reason=self.recovery_reason or "soft recovery",
+            )
+            return ControlOutput(0.0, 0.0, self.last_command, source="legacy"), telemetry
+
         if ball.found and ball.center_norm is not None:
             self.last_good_target_time = now
+            ignore_velocity = now < self.reacquire_until
             legacy_tilt_x, legacy_tilt_y = self.controller.compute(
                 ball.center_norm[0],
                 ball.center_norm[1],
                 ball.velocity_norm[0],
                 ball.velocity_norm[1],
+                ignore_velocity=ignore_velocity,
             )
             transformed_legacy = self._transform_control_axes(legacy_tilt_x, legacy_tilt_y)
             (tilt_x, tilt_y), telemetry = self.neural.infer(ball, transformed_legacy[0], transformed_legacy[1], dt)
+            error_distance = ((0.5 - ball.center_norm[0]) ** 2 + (0.5 - ball.center_norm[1]) ** 2) ** 0.5
+            self.recent_control_window.append((tilt_x, tilt_y, error_distance))
+            if self._should_trigger_bias_recovery():
+                self._trigger_soft_recovery("directional bias drift")
+                self.last_command = self.arduino.send_center()
+                telemetry = NeuralTelemetry(
+                    enabled=self.controller_mode != "legacy",
+                    mode=self.controller_mode,
+                    model_loaded=self.neural.model_loaded,
+                    fallback_reason="directional bias drift",
+                )
+                return ControlOutput(0.0, 0.0, self.last_command, source="legacy"), telemetry
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
             return self._build_control_output(tilt_x, tilt_y, transformed_legacy, telemetry), telemetry
 
@@ -206,9 +296,12 @@ class RuntimeApp:
             )
             transformed_legacy = self._transform_control_axes(legacy_tilt_x, legacy_tilt_y)
             (tilt_x, tilt_y), telemetry = self.neural.infer(self.last_detected_ball, transformed_legacy[0], transformed_legacy[1], dt)
+            error_distance = ((0.5 - self.last_detected_ball.center_norm[0]) ** 2 + (0.5 - self.last_detected_ball.center_norm[1]) ** 2) ** 0.5
+            self.recent_control_window.append((tilt_x, tilt_y, error_distance))
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
             return self._build_control_output(tilt_x, tilt_y, transformed_legacy, telemetry), telemetry
 
+        self.recent_control_window.clear()
         self.last_command = self.arduino.send_center()
         telemetry = NeuralTelemetry(
             enabled=self.controller_mode != "legacy",
