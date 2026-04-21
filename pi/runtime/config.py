@@ -24,16 +24,16 @@ class RuntimeConfig:
     max_blob_area_ratio: float = 0.09
     min_confidence: float = 0.20
 
-    kp_x: float = 1.35
-    kp_y: float = 1.35
-    ki_x: float = 0.015
-    ki_y: float = 0.015
-    kd_x: float = 0.00
-    kd_y: float = 0.00
-    max_tilt: float = 0.85
-    min_tilt: float = 0.18
+    kp_x: float = 1.10
+    kp_y: float = 1.10
+    ki_x: float = 0.012
+    ki_y: float = 0.012
+    kd_x: float = 0.06
+    kd_y: float = 0.06
+    max_tilt: float = 0.75
+    min_tilt: float = 0.12
     deadband: float = 0.01
-    integral_limit: float = 10.0
+    integral_limit: float = 8.0
     catch_velocity_threshold: float = 0.75
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0
