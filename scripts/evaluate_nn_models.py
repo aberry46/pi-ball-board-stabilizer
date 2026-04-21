@@ -21,6 +21,7 @@ def parse_args() -> argparse.Namespace:
         help="One or more directories or JSONL files of control traces.",
     )
     parser.add_argument("--artifacts", default="artifacts/nn", help="Artifact directory.")
+    parser.add_argument("--policy-file", default="policy_model.npz", help="Policy artifact filename to evaluate.")
     parser.add_argument("--history-steps", type=int, default=8)
     parser.add_argument("--horizon", type=int, default=5)
     return parser.parse_args()
@@ -53,9 +54,11 @@ def main() -> int:
         dyn_pred = dynamics(normalizer.transform(dyn_x))
         print(f"Dynamics MSE: {mse(dyn_pred, dyn_y):.6f}")
 
-    if (artifact_dir / "policy_model.npz").exists() and len(pol_x):
-        policy = NumpyMLP(artifact_dir / "policy_model.npz")
+    policy_path = artifact_dir / args.policy_file
+    if policy_path.exists() and len(pol_x):
+        policy = NumpyMLP(policy_path)
         pol_pred = policy(normalizer.transform(pol_x))
+        print(f"Policy file: {policy_path.name}")
         print(f"Policy imitation MSE: {mse(pol_pred, pol_y):.6f}")
         print(f"Mean policy disagreement: {float(np.mean(np.linalg.norm(pol_pred - pol_y, axis=1))):.6f}")
     return 0

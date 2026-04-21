@@ -114,6 +114,16 @@ PYTHONPATH=. python scripts/train_dynamics_model.py --data runtime_data/control_
 PYTHONPATH=. python scripts/train_policy_model.py --data runtime_data/control_logs
 ```
 
+To train a smarter second-pass policy from a planner built on the learned dynamics model:
+
+```bash
+PYTHONPATH=. python scripts/train_policy_with_planner.py
+```
+
+That writes:
+
+- `artifacts/nn/policy_model_planner.npz`
+
 Artifacts are written by default to:
 
 - `artifacts/nn/dynamics_model.npz`
@@ -124,6 +134,12 @@ Artifacts are written by default to:
 
 ```bash
 PYTHONPATH=. python scripts/evaluate_nn_models.py --data runtime_data/control_logs
+```
+
+To evaluate the planner-trained policy artifact instead:
+
+```bash
+PYTHONPATH=. python scripts/evaluate_nn_models.py --policy-file policy_model_planner.npz
 ```
 
 ### Live Mode Switching
