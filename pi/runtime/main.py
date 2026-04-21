@@ -35,6 +35,7 @@ class RuntimeApp:
         self.consecutive_frame_misses = 0
         self.last_raw_frame_b64: str | None = None
         self.last_mask_frame_b64: str | None = None
+        self.last_detected_ball = BallEstimate()
 
     def run(self) -> None:
         self.ipc.start()
@@ -78,6 +79,8 @@ class RuntimeApp:
                 if self.board.initialized:
                     self._draw_board(display_frame)
                     ball, mask_frame = self.tracker.detect(frame, self.board)
+                    if ball.found and ball.center_norm is not None:
+                        self.last_detected_ball = ball
 
                 if self.mode == RuntimeMode.RUNNING and self.board.initialized:
                     control = self._update_control(ball)
@@ -113,6 +116,8 @@ class RuntimeApp:
     def _handle_command(self, command: str) -> None:
         if command == "RUN":
             self.mode = RuntimeMode.RUNNING if self.board.initialized else RuntimeMode.CALIBRATING
+            if self.last_detected_ball.found and self.last_detected_ball.center_norm is not None:
+                self.last_good_target_time = time.time()
             print("Command: RUN")
         elif command == "PAUSE":
             self.mode = RuntimeMode.PAUSED
@@ -154,6 +159,21 @@ class RuntimeApp:
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
             return ControlOutput(tilt_x, tilt_y, self.last_command)
 
+        if (
+            self.last_detected_ball.found
+            and self.last_detected_ball.center_norm is not None
+            and now - self.last_good_target_time <= self.config.lost_track_grace_s
+        ):
+            tilt_x, tilt_y = self.controller.compute(
+                self.last_detected_ball.center_norm[0],
+                self.last_detected_ball.center_norm[1],
+                self.last_detected_ball.velocity_norm[0],
+                self.last_detected_ball.velocity_norm[1],
+            )
+            tilt_x, tilt_y = self._transform_control_axes(tilt_x, tilt_y)
+            self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
+            return ControlOutput(tilt_x, tilt_y, self.last_command)
+
         if now - self.last_good_target_time <= self.config.lost_track_grace_s:
             previous = self.snapshot_store.get().control
             self.last_command = self.arduino.send_tilt(previous.tilt_x, previous.tilt_y)
@@ -189,6 +209,11 @@ class RuntimeApp:
         cv2.circle(frame, ball.center_px, 3, (255, 0, 0), -1)
 
     def _update_preview_images(self, display_frame: np.ndarray, mask_frame: np.ndarray, now: float) -> None:
+        if self.mode == RuntimeMode.RUNNING and self.config.disable_preview_while_running:
+            self.last_raw_frame_b64 = None
+            self.last_mask_frame_b64 = None
+            return
+
         preview_fps = self.config.preview_running_fps if self.mode == RuntimeMode.RUNNING else self.config.preview_fps
         min_interval = 1.0 / max(0.1, preview_fps)
         if now - self.last_preview_publish_time < min_interval:
