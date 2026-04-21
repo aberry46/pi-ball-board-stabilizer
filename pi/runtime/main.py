@@ -146,6 +146,7 @@ class RuntimeApp:
                 ball.velocity_norm[0],
                 ball.velocity_norm[1],
             )
+            tilt_x, tilt_y = self._transform_control_axes(tilt_x, tilt_y)
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
             return ControlOutput(tilt_x, tilt_y, self.last_command)
 
@@ -156,6 +157,18 @@ class RuntimeApp:
 
         self.last_command = self.arduino.send_center()
         return ControlOutput(0.0, 0.0, self.last_command)
+
+    def _transform_control_axes(self, tilt_x: float, tilt_y: float) -> tuple[float, float]:
+        out_x, out_y = tilt_x, tilt_y
+
+        if self.config.swap_control_axes:
+            out_x, out_y = out_y, out_x
+        if self.config.invert_control_x:
+            out_x = -out_x
+        if self.config.invert_control_y:
+            out_y = -out_y
+
+        return out_x, out_y
 
     def _draw_board(self, frame: np.ndarray) -> None:
         corners = np.asarray(self.board.corners, dtype=np.int32)

@@ -36,7 +36,11 @@ class RuntimeConfig:
     catch_multiplier: float = 1.10
     lost_track_grace_s: float = 0.35
 
-    serial_port: str = "/dev/ttyACM0"
+    swap_control_axes: bool = True
+    invert_control_x: bool = True
+    invert_control_y: bool = True
+
+    serial_port: str = "/dev/ttyACM1"
     serial_baud: int = 115200
     serial_timeout_s: float = 0.1
 
