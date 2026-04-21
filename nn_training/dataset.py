@@ -44,6 +44,13 @@ def load_sessions(path: Path) -> list[SessionData]:
     return sessions
 
 
+def load_sessions_from_paths(paths: list[Path]) -> list[SessionData]:
+    sessions: list[SessionData] = []
+    for path in paths:
+        sessions.extend(load_sessions(path))
+    return sessions
+
+
 def row_to_feature(row: dict, dt: float) -> np.ndarray:
     x = row.get("x", 0.5) if row.get("x") is not None else 0.5
     y = row.get("y", 0.5) if row.get("y") is not None else 0.5

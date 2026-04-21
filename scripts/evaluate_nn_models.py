@@ -7,14 +7,19 @@ from pathlib import Path
 
 import numpy as np
 
-from nn_training.dataset import build_dynamics_dataset, build_policy_dataset, load_sessions
+from nn_training.dataset import build_dynamics_dataset, build_policy_dataset, load_sessions_from_paths
 from nn_training.mlp import Normalization, mse
 from pi.runtime.nn import NumpyMLP
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate trained NN artifacts against held-out logs.")
-    parser.add_argument("--data", default="runtime_data/control_logs", help="Directory or JSONL file of control traces.")
+    parser.add_argument(
+        "--data",
+        nargs="+",
+        default=["runtime_data/control_logs", "runtime_data/system_id"],
+        help="One or more directories or JSONL files of control traces.",
+    )
     parser.add_argument("--artifacts", default="artifacts/nn", help="Artifact directory.")
     parser.add_argument("--history-steps", type=int, default=8)
     parser.add_argument("--horizon", type=int, default=5)
@@ -23,10 +28,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    data_path = Path(args.data)
+    data_paths = [Path(entry) for entry in args.data]
     artifact_dir = Path(args.artifacts)
-    sessions = load_sessions(data_path)
-    norm_payload = json.loads((artifact_dir / "normalization.json").read_text(encoding="utf-8"))
+    sessions = load_sessions_from_paths(data_paths)
+    normalization_path = artifact_dir / "normalization.json"
+    if not normalization_path.exists():
+        print(f"No normalization artifact found at {normalization_path}")
+        return 1
+
+    norm_payload = json.loads(normalization_path.read_text(encoding="utf-8"))
     normalizer = Normalization(
         np.asarray(norm_payload["means"], dtype=np.float32),
         np.asarray(norm_payload["stds"], dtype=np.float32),
@@ -35,7 +45,7 @@ def main() -> int:
     dyn_x, dyn_y = build_dynamics_dataset(sessions, args.history_steps, args.horizon)
     pol_x, pol_y = build_policy_dataset(sessions, args.history_steps)
     if len(dyn_x) == 0 and len(pol_x) == 0:
-        print("No evaluation samples found.")
+        print("No evaluation samples found in:", ", ".join(str(path) for path in data_paths))
         return 1
 
     if (artifact_dir / "dynamics_model.npz").exists() and len(dyn_x):
@@ -53,4 +63,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

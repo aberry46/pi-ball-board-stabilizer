@@ -5,13 +5,18 @@ import sys
 from pathlib import Path
 
 from nn_training.artifacts import write_metadata
-from nn_training.dataset import build_feature_matrix, build_policy_dataset, load_sessions, train_val_split
+from nn_training.dataset import build_feature_matrix, build_policy_dataset, load_sessions_from_paths, train_val_split
 from nn_training.mlp import Normalization, SimpleMLP
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the neural policy model from runtime control logs.")
-    parser.add_argument("--data", default="runtime_data/control_logs", help="Directory or JSONL file of control traces.")
+    parser.add_argument(
+        "--data",
+        nargs="+",
+        default=["runtime_data/control_logs", "runtime_data/system_id"],
+        help="One or more directories or JSONL files of control traces.",
+    )
     parser.add_argument("--output-dir", default="artifacts/nn", help="Artifact output directory.")
     parser.add_argument("--history-steps", type=int, default=8, help="History steps per sample.")
     parser.add_argument("--epochs", type=int, default=300, help="Training epochs.")
@@ -20,11 +25,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    data_path = Path(args.data)
-    sessions = load_sessions(data_path)
+    data_paths = [Path(entry) for entry in args.data]
+    sessions = load_sessions_from_paths(data_paths)
     inputs, targets = build_policy_dataset(sessions, args.history_steps)
     if len(inputs) == 0:
-        print("No usable policy samples found.")
+        print("No usable policy samples found in:", ", ".join(str(path) for path in data_paths))
         return 1
 
     train_x, train_y, val_x, val_y = train_val_split(inputs, targets)
@@ -53,7 +58,7 @@ def main() -> int:
         model_type="policy",
         history_steps=args.history_steps,
         output_dim=train_y.shape[1],
-        source_path=str(data_path),
+        source_path=", ".join(str(path) for path in data_paths),
         extra={"epochs": args.epochs, "train_loss": result.train_loss, "val_loss": result.val_loss},
     )
     print(f"Saved policy model to {model_path}")
