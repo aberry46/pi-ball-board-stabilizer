@@ -72,6 +72,7 @@ class RuntimeApp:
                     self.board = self.calibrator.update(frame)
                     if self.board.initialized:
                         self.mode = RuntimeMode.STOPPED
+                        self.controller.reset()
                         self.tracker.reset()
                         self.last_command = self.arduino.send_center()
                         print("Calibration complete. Runtime is STOPPED and ready.")
@@ -116,19 +117,23 @@ class RuntimeApp:
     def _handle_command(self, command: str) -> None:
         if command == "RUN":
             self.mode = RuntimeMode.RUNNING if self.board.initialized else RuntimeMode.CALIBRATING
+            self.controller.reset()
             if self.last_detected_ball.found and self.last_detected_ball.center_norm is not None:
                 self.last_good_target_time = time.time()
             print("Command: RUN")
         elif command == "PAUSE":
             self.mode = RuntimeMode.PAUSED
+            self.controller.reset()
             self.last_command = self.arduino.send_center()
             print("Command: PAUSE")
         elif command == "STOP":
             self.mode = RuntimeMode.STOPPED
+            self.controller.reset()
             self.last_command = self.arduino.send_center()
             print("Command: STOP")
         elif command == "RECALIBRATE":
             self.mode = RuntimeMode.CALIBRATING
+            self.controller.reset()
             self.calibrator.reset()
             self.tracker.reset()
             self.board = BoardCalibration(safety_margin_ratio=self.config.safety_margin_ratio)

@@ -26,17 +26,20 @@ class RuntimeConfig:
 
     kp_x: float = 1.35
     kp_y: float = 1.35
+    ki_x: float = 0.015
+    ki_y: float = 0.015
     kd_x: float = 0.00
     kd_y: float = 0.00
     max_tilt: float = 0.85
     min_tilt: float = 0.18
     deadband: float = 0.01
+    integral_limit: float = 10.0
     catch_velocity_threshold: float = 0.75
     catch_error_threshold: float = 0.35
     catch_multiplier: float = 1.0
     lost_track_grace_s: float = 0.10
 
-    swap_control_axes: bool = True
+    swap_control_axes: bool = False
     invert_control_x: bool = False
     invert_control_y: bool = False
 

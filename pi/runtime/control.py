@@ -20,13 +20,45 @@ def sign(value: float) -> float:
 @dataclass
 class Controller:
     config: RuntimeConfig
+    integral_x: float = 0.0
+    integral_y: float = 0.0
+
+    def reset(self) -> None:
+        self.integral_x = 0.0
+        self.integral_y = 0.0
 
     def compute(self, x: float, y: float, vx: float, vy: float) -> tuple[float, float]:
         error_x = 0.5 - x
         error_y = 0.5 - y
 
-        tilt_x = self.config.kp_x * error_x - self.config.kd_x * vx
-        tilt_y = self.config.kp_y * error_y - self.config.kd_y * vy
+        if abs(error_x) < self.config.deadband:
+            self.integral_x = 0.0
+        else:
+            self.integral_x = clamp(
+                self.integral_x + error_x,
+                -self.config.integral_limit,
+                self.config.integral_limit,
+            )
+
+        if abs(error_y) < self.config.deadband:
+            self.integral_y = 0.0
+        else:
+            self.integral_y = clamp(
+                self.integral_y + error_y,
+                -self.config.integral_limit,
+                self.config.integral_limit,
+            )
+
+        tilt_x = (
+            self.config.kp_x * error_x
+            + self.config.ki_x * self.integral_x
+            - self.config.kd_x * vx
+        )
+        tilt_y = (
+            self.config.kp_y * error_y
+            + self.config.ki_y * self.integral_y
+            - self.config.kd_y * vy
+        )
 
         if abs(error_x) >= self.config.catch_error_threshold or abs(vx) >= self.config.catch_velocity_threshold:
             tilt_x *= self.config.catch_multiplier
