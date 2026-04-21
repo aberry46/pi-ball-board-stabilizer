@@ -27,7 +27,7 @@ const bool FAST_REACTION_MODE = true;
 const bool IMMEDIATE_ON_COMMAND = true;
 const int SERVO_STEP_PER_UPDATE = 12;
 const unsigned long SERVO_UPDATE_MS = 4;
-const unsigned long COMMAND_TIMEOUT_MS = 250;
+const unsigned long COMMAND_TIMEOUT_MS = 1000;
 
 // Serial parsing
 const unsigned long SERIAL_BAUD = 115200;

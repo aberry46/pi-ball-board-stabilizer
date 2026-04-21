@@ -189,7 +189,8 @@ class RuntimeApp:
         cv2.circle(frame, ball.center_px, 3, (255, 0, 0), -1)
 
     def _update_preview_images(self, display_frame: np.ndarray, mask_frame: np.ndarray, now: float) -> None:
-        min_interval = 1.0 / max(0.1, self.config.preview_fps)
+        preview_fps = self.config.preview_running_fps if self.mode == RuntimeMode.RUNNING else self.config.preview_fps
+        min_interval = 1.0 / max(0.1, preview_fps)
         if now - self.last_preview_publish_time < min_interval:
             return
 

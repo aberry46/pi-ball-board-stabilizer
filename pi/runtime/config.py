@@ -50,5 +50,6 @@ class RuntimeConfig:
     log_every_n_frames: int = 10
     snapshot_jpeg_quality: int = 75
     preview_fps: float = 2.0
+    preview_running_fps: float = 0.5
     preview_max_width: int = 480
     preview_dir: Path = Path("/tmp/pi_ball_board_stabilizer")
