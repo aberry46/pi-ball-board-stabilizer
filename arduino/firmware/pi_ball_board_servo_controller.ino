@@ -32,6 +32,7 @@ const unsigned long COMMAND_TIMEOUT_MS = 1000;
 // Serial parsing
 const unsigned long SERIAL_BAUD = 115200;
 const size_t COMMAND_BUFFER_SIZE = 64;
+const bool VERBOSE_COMMAND_ACKS = false;
 
 float targetTiltX = 0.0f;
 float targetTiltY = 0.0f;
@@ -216,10 +217,12 @@ void handleTiltCommand(const char *command) {
   applyTargetsFromTilt(FAST_REACTION_MODE && IMMEDIATE_ON_COMMAND);
   lastCommandMillis = millis();
 
-  Serial.print("OK TILT ");
-  Serial.print(targetTiltX, 3);
-  Serial.print(" ");
-  Serial.println(targetTiltY, 3);
+  if (VERBOSE_COMMAND_ACKS) {
+    Serial.print("OK TILT ");
+    Serial.print(targetTiltX, 3);
+    Serial.print(" ");
+    Serial.println(targetTiltY, 3);
+  }
 }
 
 void handleCommand(const char *command) {
@@ -231,7 +234,9 @@ void handleCommand(const char *command) {
   if (strcmp(command, "CENTER") == 0) {
     setNeutralTarget(FAST_REACTION_MODE && IMMEDIATE_ON_COMMAND);
     lastCommandMillis = millis();
-    Serial.println("OK CENTER");
+    if (VERBOSE_COMMAND_ACKS) {
+      Serial.println("OK CENTER");
+    }
     return;
   }
 
