@@ -30,8 +30,11 @@ class RuntimeApp:
         self.last_good_target_time = 0.0
         self.last_loop_time = time.time()
         self.last_frame_time = time.time()
+        self.last_preview_publish_time = 0.0
         self.last_command = "CENTER"
         self.consecutive_frame_misses = 0
+        self.last_raw_frame_b64: str | None = None
+        self.last_mask_frame_b64: str | None = None
 
     def run(self) -> None:
         self.ipc.start()
@@ -84,6 +87,7 @@ class RuntimeApp:
                     control = ControlOutput(0.0, 0.0, self.last_command)
 
                 self._draw_ball(display_frame, ball)
+                self._update_preview_images(display_frame, mask_frame, now)
                 snapshot = RuntimeSnapshot(
                     mode=self.mode,
                     board=self.board,
@@ -92,8 +96,8 @@ class RuntimeApp:
                     fps=(1.0 / dt) if dt > 0 else 0.0,
                     frame_age_ms=(time.time() - self.last_frame_time) * 1000.0,
                     last_error=None if self.mode != RuntimeMode.FAULT else "manual recovery required",
-                    raw_frame_b64=encode_jpeg_base64(display_frame, self.config.snapshot_jpeg_quality),
-                    mask_frame_b64=encode_jpeg_base64(cv2.cvtColor(mask_frame, cv2.COLOR_GRAY2BGR), self.config.snapshot_jpeg_quality),
+                    raw_frame_b64=self.last_raw_frame_b64,
+                    mask_frame_b64=self.last_mask_frame_b64,
                 )
                 self.snapshot_store.set(snapshot)
 
@@ -183,6 +187,26 @@ class RuntimeApp:
             return
         cv2.circle(frame, ball.center_px, max(4, int(round(ball.radius_px))), (0, 255, 0), 2)
         cv2.circle(frame, ball.center_px, 3, (255, 0, 0), -1)
+
+    def _update_preview_images(self, display_frame: np.ndarray, mask_frame: np.ndarray, now: float) -> None:
+        min_interval = 1.0 / max(0.1, self.config.preview_fps)
+        if now - self.last_preview_publish_time < min_interval:
+            return
+
+        self.last_preview_publish_time = now
+        preview_display = self._resize_for_preview(display_frame)
+        preview_mask = self._resize_for_preview(cv2.cvtColor(mask_frame, cv2.COLOR_GRAY2BGR))
+        self.last_raw_frame_b64 = encode_jpeg_base64(preview_display, self.config.snapshot_jpeg_quality)
+        self.last_mask_frame_b64 = encode_jpeg_base64(preview_mask, self.config.snapshot_jpeg_quality)
+
+    def _resize_for_preview(self, frame: np.ndarray) -> np.ndarray:
+        height, width = frame.shape[:2]
+        if width <= self.config.preview_max_width:
+            return frame
+
+        scale = self.config.preview_max_width / float(width)
+        new_size = (self.config.preview_max_width, max(1, int(round(height * scale))))
+        return cv2.resize(frame, new_size, interpolation=cv2.INTER_AREA)
 
     def _norm_to_px(self, point: tuple[float, float]) -> tuple[int, int]:
         corners = np.asarray(self.board.corners, dtype=np.float32)

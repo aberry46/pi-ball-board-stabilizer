@@ -38,7 +38,7 @@ class RuntimeConfig:
 
     swap_control_axes: bool = False
     invert_control_x: bool = True
-    invert_control_y: bool = True
+    invert_control_y: bool = False
 
     serial_port: str = "/dev/ttyACM1"
     serial_baud: int = 115200
@@ -49,4 +49,6 @@ class RuntimeConfig:
 
     log_every_n_frames: int = 10
     snapshot_jpeg_quality: int = 75
+    preview_fps: float = 2.0
+    preview_max_width: int = 480
     preview_dir: Path = Path("/tmp/pi_ball_board_stabilizer")
