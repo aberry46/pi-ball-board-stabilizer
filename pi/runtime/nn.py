@@ -237,7 +237,7 @@ class NeuralController:
         if inference_ms > self.config.nn_max_inference_ms:
             telemetry.fallback_reason = "inference timeout"
             return (legacy_tilt_x, legacy_tilt_y), telemetry
-        if telemetry.edge_risk > 0.5:
+        if telemetry.edge_risk >= self.config.nn_edge_risk_threshold:
             telemetry.fallback_reason = "predicted edge risk"
             return (legacy_tilt_x, legacy_tilt_y), telemetry
 
@@ -272,12 +272,18 @@ class NeuralController:
         x0, y0 = ball.center_norm
         horizon_steps = max(1, len(dynamics_out) // 4)
         risk = 0.0
+        soft_margin = max(self.config.nn_predicted_edge_margin, self.config.edge_touch_dead_margin + 1e-3)
+        hard_margin = self.config.edge_touch_dead_margin
         for step in range(horizon_steps):
             dx = float(dynamics_out[step * 4 + 0])
             dy = float(dynamics_out[step * 4 + 1])
             future_x = x0 + dx
             future_y = y0 + dy
-            if near_edge((future_x, future_y), self.config.nn_near_edge_margin):
-                risk = 1.0
-                break
+            edge_distance = min(future_x, future_y, 1.0 - future_x, 1.0 - future_y)
+            if edge_distance <= hard_margin:
+                return 1.0
+            if edge_distance < soft_margin:
+                local_risk = 1.0 - ((edge_distance - hard_margin) / max(1e-6, soft_margin - hard_margin))
+                horizon_weight = 0.75 + 0.25 * ((step + 1) / horizon_steps)
+                risk = max(risk, clamp(local_risk * horizon_weight, 0.0, 1.0))
         return risk

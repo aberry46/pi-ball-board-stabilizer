@@ -577,14 +577,16 @@ HTML = """
       const visibleMode = modeTitle(snap.mode, ballLostWhileRunning);
       const controllerMode = snap.controller_mode || 'legacy';
       const [ballHeadline, ballHeadlineSub] = ballHeadlineText(snap, ballLostWhileRunning);
+      const rawFallback = snap.neural.fallback_reason || '';
+      const friendlyFallback = rawFallback === 'runtime not running' ? 'armed for live run' : rawFallback;
       const nnStatusText = snap.neural.active ? `active (${snap.neural.mode})` :
-        (snap.neural.fallback_reason ? `fallback: ${snap.neural.fallback_reason}` : snap.neural.mode || 'legacy');
+        (friendlyFallback ? `fallback: ${friendlyFallback}` : snap.neural.mode || 'legacy');
       const neuralHeadline = snap.neural.active ? 'Actively Steering' :
-        (snap.neural.fallback_reason ? 'Fallback Active' : 'Observing');
+        (friendlyFallback ? 'Fallback Active' : 'Observing');
       const neuralHeadlineSub = snap.neural.active
         ? `Using ${snap.control.source || 'neural'} output right now.`
-        : (snap.neural.fallback_reason
-          ? `Held back because ${snap.neural.fallback_reason}.`
+        : (friendlyFallback
+          ? `Held back because ${friendlyFallback}.`
           : 'NN is loaded but not yet influencing the final command.');
       document.getElementById('mode').innerHTML = `<span class="mode-kicker">System Mode</span><span class="mode-value">${visibleMode}</span>`;
       document.getElementById('mode').className = ballLostWhileRunning ? 'card alert' : 'card';
@@ -639,14 +641,17 @@ HTML = """
       document.getElementById('meta-source').textContent = snap.control.source || 'legacy';
       document.getElementById('nn-explainer').textContent = snap.neural.active
         ? 'The NN is actively influencing the output right now.'
-        : (snap.neural.fallback_reason
-          ? `The NN is not steering because: ${snap.neural.fallback_reason}.`
+        : (friendlyFallback
+          ? `The NN is not steering because: ${friendlyFallback}.`
           : 'The NN is loaded but currently shadowing the legacy controller.');
       document.getElementById('nn-callout').textContent = snap.neural.active
         ? `Neural command is live. Final output is currently coming from ${snap.control.source || 'the neural controller'}.`
-        : (snap.neural.fallback_reason
-          ? `Fallback is protecting the run. Reason: ${snap.neural.fallback_reason}. Legacy command still provides the safety baseline.`
+        : (friendlyFallback
+          ? `Fallback is protecting the run. Reason: ${friendlyFallback}. Legacy command still provides the safety baseline.`
           : `The network is thinking in ${controllerMode}. Compare NN bars to final bars to see how close it is to taking over.`);
+      if (!snap.neural.active && rawFallback === 'predicted edge risk' && Number(snap.neural.disagreement || 0) >= 0.75) {
+        document.getElementById('nn-callout').textContent = `Large legacy-vs-NN disagreement near the edge. This can mean either the NN is still immature or the legacy controller is the weaker pilot in this region, so these runs are especially valuable training data.`;
+      }
       document.getElementById('raw').src = snap.raw_frame_b64 ? `data:image/jpeg;base64,${snap.raw_frame_b64}` : '';
       document.getElementById('mask').src = snap.mask_frame_b64 ? `data:image/jpeg;base64,${snap.mask_frame_b64}` : '';
       document.getElementById('raw-note').textContent = snap.raw_frame_b64 ? '' : (ballLostWhileRunning ? 'Ball lost. Press Ball Fell Off to reset quickly.' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : ''));

@@ -70,6 +70,9 @@ class RuntimeConfig:
     nn_min_ball_confidence: float = 0.75
     nn_near_edge_margin: float = 0.08
     edge_touch_dead_margin: float = 0.03
+    nn_predicted_edge_margin: float = 0.06
+    nn_edge_risk_threshold: float = 0.85
+    nn_large_disagreement_threshold: float = 0.75
     nn_assist_blend: float = 0.35
     nn_assist_max_delta: float = 0.18
     nn_primary_max_delta: float = 0.35
