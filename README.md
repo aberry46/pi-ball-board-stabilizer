@@ -78,6 +78,14 @@ The runtime loads that file automatically at startup. A sample is in:
 
 - `docs/local-runtime-config.example.json`
 
+The recommended runtime path for the active policy is:
+
+- `artifacts/nn/policy_model_active.npz`
+
+During live runs, the runtime can also treat the ball as effectively lost if it touches the board edge zone. The default dead-run margin is:
+
+- `edge_touch_dead_margin = 0.03`
+
 ### Control Logging
 
 Each runtime session can write replay-quality JSONL traces under:
@@ -140,6 +148,26 @@ To evaluate the planner-trained policy artifact instead:
 
 ```bash
 PYTHONPATH=. python scripts/evaluate_nn_models.py --policy-file policy_model_planner.npz
+```
+
+### Train And Activate In A Loop
+
+To retrain the full stack:
+
+```bash
+PYTHONPATH=. python scripts/train_all_models.py --with-planner --planner-profile fast --sample-stride 2
+```
+
+To promote a policy artifact to the active runtime path:
+
+```bash
+PYTHONPATH=. python scripts/activate_policy_artifact.py artifacts/nn/policy_model.npz
+```
+
+Or for the planner-distilled policy:
+
+```bash
+PYTHONPATH=. python scripts/activate_policy_artifact.py artifacts/nn/policy_model_planner.npz
 ```
 
 ### Live Mode Switching

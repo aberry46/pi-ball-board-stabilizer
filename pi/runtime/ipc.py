@@ -47,7 +47,7 @@ class _Handler(socketserver.StreamRequestHandler):
         payload = json.loads(line.decode("utf-8"))
         action = payload.get("action", "")
 
-        if action in {"RUN", "PAUSE", "STOP", "RECALIBRATE"}:
+        if action in {"RUN", "PAUSE", "STOP", "RECALIBRATE", "BALL_FELL_OFF"}:
             self.server.command_queue.put({"action": action})  # type: ignore[attr-defined]
             response = {"ok": True, "accepted": action}
         elif action == "SET_CONTROLLER_MODE":

@@ -14,7 +14,7 @@ class PlannerConfig:
     history_steps: int = 8
     rollout_steps: int = 3
     max_tilt: float = 0.65
-    candidate_levels: tuple[float, ...] = (-1.0, -0.5, 0.0, 0.5, 1.0)
+    candidate_levels: tuple[float, ...] = (-1.0, 0.0, 1.0)
     position_weight: float = 4.0
     speed_weight: float = 3.5
     edge_weight: float = 10.0
@@ -68,6 +68,27 @@ class LearnedDynamicsPlanner:
             for y_scale in self.config.candidate_levels:
                 actions.append((x_scale * self.config.max_tilt, y_scale * self.config.max_tilt))
         return actions
+
+    @classmethod
+    def from_profile(
+        cls,
+        *,
+        history_steps: int,
+        rollout_steps: int,
+        max_tilt: float,
+        profile: str,
+    ) -> "PlannerConfig":
+        profiles = {
+            "fast": (-1.0, 0.0, 1.0),
+            "balanced": (-1.0, -0.5, 0.0, 0.5, 1.0),
+            "dense": (-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0),
+        }
+        return cls(
+            history_steps=history_steps,
+            rollout_steps=rollout_steps,
+            max_tilt=max_tilt,
+            candidate_levels=profiles.get(profile, profiles["fast"]),
+        )
 
     def choose_action(self, history: np.ndarray) -> tuple[float, float]:
         if history.shape[0] != self.config.history_steps or history.shape[1] != self.feature_dim:

@@ -27,6 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-steps", type=int, default=8, help="History steps per sample.")
     parser.add_argument("--epochs", type=int, default=300, help="Training epochs.")
     parser.add_argument("--rollout-steps", type=int, default=3, help="Planner rollout depth.")
+    parser.add_argument("--planner-profile", choices=["fast", "balanced", "dense"], default="fast", help="Candidate action density for the planner.")
+    parser.add_argument("--sample-stride", type=int, default=1, help="Use every Nth training window to reduce planner runtime.")
     return parser.parse_args()
 
 
@@ -34,13 +36,14 @@ def build_planner_dataset(
     sessions,
     history_steps: int,
     planner: LearnedDynamicsPlanner,
+    sample_stride: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     inputs: list[np.ndarray] = []
     targets: list[np.ndarray] = []
     feature_dim = len(FEATURE_NAMES)
     for session in sessions:
         rows = session.rows
-        for index in range(history_steps, len(rows)):
+        for index in range(history_steps, len(rows), max(1, sample_stride)):
             history_rows = rows[index - history_steps : index]
             current_row = rows[index]
             if not bool(current_row.get("ball_found")) or current_row.get("x") is None or current_row.get("y") is None:
@@ -91,11 +94,16 @@ def main() -> int:
     planner = LearnedDynamicsPlanner(
         dynamics_model=dynamics_model,
         normalizer=normalizer,
-        config=PlannerConfig(history_steps=args.history_steps, rollout_steps=args.rollout_steps),
+        config=PlannerConfig.from_profile(
+            history_steps=args.history_steps,
+            rollout_steps=args.rollout_steps,
+            max_tilt=0.65,
+            profile=args.planner_profile,
+        ),
     )
 
     sessions = load_sessions_from_paths(data_paths)
-    inputs, targets = build_planner_dataset(sessions, args.history_steps, planner)
+    inputs, targets = build_planner_dataset(sessions, args.history_steps, planner, args.sample_stride)
     if len(inputs) == 0:
         print("No usable planner policy samples found in:", ", ".join(str(path) for path in data_paths))
         return 1
@@ -129,6 +137,8 @@ def main() -> int:
         extra={
             "epochs": args.epochs,
             "rollout_steps": args.rollout_steps,
+            "planner_profile": args.planner_profile,
+            "sample_stride": args.sample_stride,
             "train_loss": result.train_loss,
             "val_loss": result.val_loss,
         },
