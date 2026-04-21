@@ -40,8 +40,8 @@ HTML = """
   <div class="layout">
     <div class="card">
       <div class="feeds">
-        <div><div>Raw</div><img id="raw" /></div>
-        <div><div>Mask</div><img id="mask" /></div>
+        <div><div>Raw</div><img id="raw" /><div id="raw-note" class="muted"></div></div>
+        <div><div>Mask</div><img id="mask" /><div id="mask-note" class="muted"></div></div>
       </div>
       <div class="buttons">
         <button onclick="sendCommand('RUN')">Run</button>
@@ -76,9 +76,24 @@ HTML = """
       return `(${Number(value[0]).toFixed(digits)}, ${Number(value[1]).toFixed(digits)})`;
     }
 
+    let refreshDelayMs = 500;
+    let refreshTimer = null;
+
+    function scheduleRefresh(delayMs) {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refresh, delayMs);
+    }
+
     async function refresh() {
-      const response = await fetch('/api/state', {cache: 'no-store'});
-      const payload = await response.json();
+      let payload;
+      try {
+        const response = await fetch('/api/state', {cache: 'no-store'});
+        payload = await response.json();
+      } catch (error) {
+        document.getElementById('mode').textContent = 'Connecting...';
+        scheduleRefresh(1000);
+        return;
+      }
       const snap = payload.snapshot;
       document.getElementById('mode').textContent = snap.mode;
       document.getElementById('runtime-state').textContent = snap.mode;
@@ -91,10 +106,13 @@ HTML = """
       document.getElementById('calibration').textContent = `${Math.round((snap.board.progress || 0) * 100)}%`;
       document.getElementById('raw').src = snap.raw_frame_b64 ? `data:image/jpeg;base64,${snap.raw_frame_b64}` : '';
       document.getElementById('mask').src = snap.mask_frame_b64 ? `data:image/jpeg;base64,${snap.mask_frame_b64}` : '';
+      document.getElementById('raw-note').textContent = snap.raw_frame_b64 ? '' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : '');
+      document.getElementById('mask-note').textContent = snap.mask_frame_b64 ? '' : (snap.mode === 'RUNNING' ? 'Preview disabled while RUNNING for performance.' : '');
+      refreshDelayMs = snap.mode === 'RUNNING' ? 800 : 300;
+      scheduleRefresh(refreshDelayMs);
     }
 
     refresh();
-    setInterval(refresh, 200);
   </script>
 </body>
 </html>
