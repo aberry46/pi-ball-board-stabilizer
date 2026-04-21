@@ -10,13 +10,13 @@ const int SERVO_X_PIN = 9;
 const int SERVO_Y_PIN = 10;
 
 // Editable calibration values
-const int SERVO_X_MIN = 14;
+const int SERVO_X_MIN = 12;
 const int SERVO_X_NEUTRAL = 27;
-const int SERVO_X_MAX = 40;
+const int SERVO_X_MAX = 42;
 
-const int SERVO_Y_MIN = 5;
+const int SERVO_Y_MIN = 3;
 const int SERVO_Y_NEUTRAL = 18;
-const int SERVO_Y_MAX = 31;
+const int SERVO_Y_MAX = 33;
 
 // Axis direction
 const bool SERVO_X_INVERT = false;
