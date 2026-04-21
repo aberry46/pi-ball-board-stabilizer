@@ -153,6 +153,28 @@ void printHelp() {
   Serial.println("Fast reaction mode is enabled.");
 }
 
+bool isNumericToken(const char *s) {
+  if (s == NULL || *s == '\0') return false;
+
+  bool seenDigit = false;
+  bool seenDot = false;
+
+  if (*s == '+' || *s == '-') s++;
+
+  while (*s != '\0') {
+    if (*s >= '0' && *s <= '9') {
+      seenDigit = true;
+    } else if (*s == '.' && !seenDot) {
+      seenDot = true;
+    } else {
+      return false;
+    }
+    s++;
+  }
+
+  return seenDigit;
+}
+
 bool parseTiltValues(const char *command, float &x, float &y) {
   char buffer[COMMAND_BUFFER_SIZE];
   strncpy(buffer, command, COMMAND_BUFFER_SIZE - 1);
@@ -171,22 +193,12 @@ bool parseTiltValues(const char *command, float &x, float &y) {
     return false;
   }
 
-  char *xEnd = NULL;
-  char *yEnd = NULL;
-  x = strtof(xToken, &xEnd);
-  y = strtof(yToken, &yEnd);
-
-  if (xEnd == xToken || yEnd == yToken) {
+  if (!isNumericToken(xToken) || !isNumericToken(yToken)) {
     return false;
   }
 
-  while (*xEnd == ' ') xEnd++;
-  while (*yEnd == ' ') yEnd++;
-
-  if (*xEnd != '\0' || *yEnd != '\0') {
-    return false;
-  }
-
+  x = atof(xToken);
+  y = atof(yToken);
   return true;
 }
 
