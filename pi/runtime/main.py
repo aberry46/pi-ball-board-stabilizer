@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import cv2
 import numpy as np
@@ -10,7 +11,9 @@ from .camera import MjpegCamera
 from .config import RuntimeConfig
 from .control import Controller
 from .ipc import RuntimeCommandQueue, RuntimeIpcServer, RuntimeSnapshotStore
-from .models import BallEstimate, BoardCalibration, ControlOutput, RuntimeMode, RuntimeSnapshot
+from .logging import ControlTraceLogger, ControlTraceRecord
+from .models import BallEstimate, BoardCalibration, ControlOutput, NeuralTelemetry, RuntimeMode, RuntimeSnapshot
+from .nn import NeuralController
 from .vision import BoardCalibrator, RedBallTracker, encode_jpeg_base64
 
 
@@ -24,6 +27,8 @@ class RuntimeApp:
         self.camera = MjpegCamera(config)
         self.arduino = ArduinoLink(config)
         self.controller = Controller(config)
+        self.neural = NeuralController(config)
+        self.controller_mode = self.neural.mode.value
         self.calibrator = BoardCalibrator(config)
         self.tracker = RedBallTracker(config)
         self.board = BoardCalibration(safety_margin_ratio=config.safety_margin_ratio)
@@ -36,6 +41,7 @@ class RuntimeApp:
         self.last_raw_frame_b64: str | None = None
         self.last_mask_frame_b64: str | None = None
         self.last_detected_ball = BallEstimate()
+        self.trace_logger = ControlTraceLogger(config.control_log_dir)
 
     def run(self) -> None:
         self.ipc.start()
@@ -73,6 +79,7 @@ class RuntimeApp:
                     if self.board.initialized:
                         self.mode = RuntimeMode.STOPPED
                         self.controller.reset()
+                        self.neural.reset()
                         self.tracker.reset()
                         self.last_command = self.arduino.send_center()
                         print("Calibration complete. Runtime is STOPPED and ready.")
@@ -84,11 +91,17 @@ class RuntimeApp:
                         self.last_detected_ball = ball
 
                 if self.mode == RuntimeMode.RUNNING and self.board.initialized:
-                    control = self._update_control(ball)
+                    control, neural = self._update_control(ball, dt)
                 else:
                     if self.last_command != "CENTER":
                         self.last_command = self.arduino.send_center()
-                    control = ControlOutput(0.0, 0.0, self.last_command)
+                    control = ControlOutput(0.0, 0.0, self.last_command, source="legacy")
+                    neural = NeuralTelemetry(
+                        enabled=self.controller_mode != "legacy",
+                        mode=self.controller_mode,
+                        model_loaded=self.neural.model_loaded,
+                        fallback_reason="runtime not running",
+                    )
 
                 self._draw_ball(display_frame, ball)
                 self._update_preview_images(display_frame, mask_frame, now)
@@ -102,8 +115,11 @@ class RuntimeApp:
                     last_error=None if self.mode != RuntimeMode.FAULT else "manual recovery required",
                     raw_frame_b64=self.last_raw_frame_b64,
                     mask_frame_b64=self.last_mask_frame_b64,
+                    controller_mode=self.controller_mode,
+                    neural=neural,
                 )
                 self.snapshot_store.set(snapshot)
+                self._log_trace(snapshot)
 
                 if frame_counter % self.config.log_every_n_frames == 0:
                     self._log(snapshot)
@@ -113,27 +129,39 @@ class RuntimeApp:
             self.arduino.close()
             self.camera.stop()
             self.ipc.stop()
+            self.trace_logger.close()
 
-    def _handle_command(self, command: str) -> None:
-        if command == "RUN":
+    def _handle_command(self, command: dict[str, Any]) -> None:
+        action = str(command.get("action", ""))
+        if action == "SET_CONTROLLER_MODE":
+            requested_mode = str(command.get("mode", "legacy"))
+            self.neural.set_mode(requested_mode)
+            self.controller_mode = self.neural.mode.value
+            print(f"Command: SET_CONTROLLER_MODE -> {self.controller_mode}")
+            return
+        if action == "RUN":
             self.mode = RuntimeMode.RUNNING if self.board.initialized else RuntimeMode.CALIBRATING
             self.controller.reset()
+            self.neural.reset()
             if self.last_detected_ball.found and self.last_detected_ball.center_norm is not None:
                 self.last_good_target_time = time.time()
             print("Command: RUN")
-        elif command == "PAUSE":
+        elif action == "PAUSE":
             self.mode = RuntimeMode.PAUSED
             self.controller.reset()
+            self.neural.reset()
             self.last_command = self.arduino.send_center()
             print("Command: PAUSE")
-        elif command == "STOP":
+        elif action == "STOP":
             self.mode = RuntimeMode.STOPPED
             self.controller.reset()
+            self.neural.reset()
             self.last_command = self.arduino.send_center()
             print("Command: STOP")
-        elif command == "RECALIBRATE":
+        elif action == "RECALIBRATE":
             self.mode = RuntimeMode.CALIBRATING
             self.controller.reset()
+            self.neural.reset()
             self.calibrator.reset()
             self.tracker.reset()
             self.board = BoardCalibration(safety_margin_ratio=self.config.safety_margin_ratio)
@@ -150,37 +178,67 @@ class RuntimeApp:
         print(f"FAULT: {message}")
         time.sleep(0.05)
 
-    def _update_control(self, ball: BallEstimate) -> ControlOutput:
+    def _update_control(self, ball: BallEstimate, dt: float) -> tuple[ControlOutput, NeuralTelemetry]:
         now = time.time()
         if ball.found and ball.center_norm is not None:
             self.last_good_target_time = now
-            tilt_x, tilt_y = self.controller.compute(
+            legacy_tilt_x, legacy_tilt_y = self.controller.compute(
                 ball.center_norm[0],
                 ball.center_norm[1],
                 ball.velocity_norm[0],
                 ball.velocity_norm[1],
             )
-            tilt_x, tilt_y = self._transform_control_axes(tilt_x, tilt_y)
+            transformed_legacy = self._transform_control_axes(legacy_tilt_x, legacy_tilt_y)
+            (tilt_x, tilt_y), telemetry = self.neural.infer(ball, transformed_legacy[0], transformed_legacy[1], dt)
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
-            return ControlOutput(tilt_x, tilt_y, self.last_command)
+            return self._build_control_output(tilt_x, tilt_y, transformed_legacy, telemetry), telemetry
 
         if (
             self.last_detected_ball.found
             and self.last_detected_ball.center_norm is not None
             and now - self.last_good_target_time <= self.config.lost_track_grace_s
         ):
-            tilt_x, tilt_y = self.controller.compute(
+            legacy_tilt_x, legacy_tilt_y = self.controller.compute(
                 self.last_detected_ball.center_norm[0],
                 self.last_detected_ball.center_norm[1],
                 self.last_detected_ball.velocity_norm[0],
                 self.last_detected_ball.velocity_norm[1],
             )
-            tilt_x, tilt_y = self._transform_control_axes(tilt_x, tilt_y)
+            transformed_legacy = self._transform_control_axes(legacy_tilt_x, legacy_tilt_y)
+            (tilt_x, tilt_y), telemetry = self.neural.infer(self.last_detected_ball, transformed_legacy[0], transformed_legacy[1], dt)
             self.last_command = self.arduino.send_tilt(tilt_x, tilt_y)
-            return ControlOutput(tilt_x, tilt_y, self.last_command)
+            return self._build_control_output(tilt_x, tilt_y, transformed_legacy, telemetry), telemetry
 
         self.last_command = self.arduino.send_center()
-        return ControlOutput(0.0, 0.0, self.last_command)
+        telemetry = NeuralTelemetry(
+            enabled=self.controller_mode != "legacy",
+            mode=self.controller_mode,
+            model_loaded=self.neural.model_loaded,
+            fallback_reason="ball unavailable",
+        )
+        return ControlOutput(0.0, 0.0, self.last_command, source="legacy"), telemetry
+
+    def _build_control_output(
+        self,
+        tilt_x: float,
+        tilt_y: float,
+        transformed_legacy: tuple[float, float],
+        telemetry: NeuralTelemetry,
+    ) -> ControlOutput:
+        return ControlOutput(
+            tilt_x=tilt_x,
+            tilt_y=tilt_y,
+            sent_command=self.last_command,
+            source="neural" if telemetry.active else "legacy",
+            legacy_tilt_x=transformed_legacy[0],
+            legacy_tilt_y=transformed_legacy[1],
+            nn_tilt_x=telemetry.policy_tilt[0],
+            nn_tilt_y=telemetry.policy_tilt[1],
+            nn_active=telemetry.active,
+            nn_inference_ms=telemetry.inference_ms,
+            nn_disagreement=telemetry.disagreement,
+            nn_fallback_reason=telemetry.fallback_reason,
+        )
 
     def _transform_control_axes(self, tilt_x: float, tilt_y: float) -> tuple[float, float]:
         out_x, out_y = tilt_x, tilt_y
@@ -254,9 +312,52 @@ class RuntimeApp:
             f"tilt=({control.tilt_x:.2f},{control.tilt_y:.2f})"
         )
 
+    def _log_trace(self, snapshot: RuntimeSnapshot) -> None:
+        ball = snapshot.ball
+        control = snapshot.control
+        self.trace_logger.log(
+            ControlTraceRecord(
+                timestamp=time.time(),
+                session_id=self.trace_logger.session_id,
+                mode=snapshot.mode.value,
+                controller_mode=snapshot.controller_mode,
+                ball_found=ball.found,
+                x=None if ball.center_norm is None else float(ball.center_norm[0]),
+                y=None if ball.center_norm is None else float(ball.center_norm[1]),
+                vx=float(ball.velocity_norm[0]),
+                vy=float(ball.velocity_norm[1]),
+                confidence=float(ball.confidence),
+                near_edge=False if ball.center_norm is None else (
+                    ball.center_norm[0] <= self.config.nn_near_edge_margin
+                    or ball.center_norm[0] >= 1.0 - self.config.nn_near_edge_margin
+                    or ball.center_norm[1] <= self.config.nn_near_edge_margin
+                    or ball.center_norm[1] >= 1.0 - self.config.nn_near_edge_margin
+                ),
+                ball_lost=not ball.found,
+                tilt_x=float(control.tilt_x),
+                tilt_y=float(control.tilt_y),
+                sent_command=control.sent_command,
+                command_source=control.source,
+                command_clamped=abs(control.tilt_x) >= self.config.max_tilt or abs(control.tilt_y) >= self.config.max_tilt,
+                legacy_tilt_x=float(control.legacy_tilt_x),
+                legacy_tilt_y=float(control.legacy_tilt_y),
+                nn_tilt_x=float(control.nn_tilt_x),
+                nn_tilt_y=float(control.nn_tilt_y),
+                nn_enabled=snapshot.neural.enabled,
+                nn_mode=snapshot.neural.mode,
+                nn_active=snapshot.neural.active,
+                nn_inference_ms=float(snapshot.neural.inference_ms),
+                nn_disagreement=float(snapshot.neural.disagreement),
+                nn_edge_risk=float(snapshot.neural.edge_risk),
+                nn_fallback_reason=snapshot.neural.fallback_reason,
+                board_corners=list(snapshot.board.corners),
+                board_initialized=snapshot.board.initialized,
+            )
+        )
+
 
 def main() -> None:
-    app = RuntimeApp(RuntimeConfig())
+    app = RuntimeApp(RuntimeConfig.load())
     app.run()
 
 

@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+from nn_training.dataset import build_dynamics_dataset, build_policy_dataset, load_sessions
+from nn_training.mlp import Normalization, mse
+from pi.runtime.nn import NumpyMLP
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Evaluate trained NN artifacts against held-out logs.")
+    parser.add_argument("--data", default="runtime_data/control_logs", help="Directory or JSONL file of control traces.")
+    parser.add_argument("--artifacts", default="artifacts/nn", help="Artifact directory.")
+    parser.add_argument("--history-steps", type=int, default=8)
+    parser.add_argument("--horizon", type=int, default=5)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    data_path = Path(args.data)
+    artifact_dir = Path(args.artifacts)
+    sessions = load_sessions(data_path)
+    norm_payload = json.loads((artifact_dir / "normalization.json").read_text(encoding="utf-8"))
+    normalizer = Normalization(
+        np.asarray(norm_payload["means"], dtype=np.float32),
+        np.asarray(norm_payload["stds"], dtype=np.float32),
+    )
+
+    dyn_x, dyn_y = build_dynamics_dataset(sessions, args.history_steps, args.horizon)
+    pol_x, pol_y = build_policy_dataset(sessions, args.history_steps)
+    if len(dyn_x) == 0 and len(pol_x) == 0:
+        print("No evaluation samples found.")
+        return 1
+
+    if (artifact_dir / "dynamics_model.npz").exists() and len(dyn_x):
+        dynamics = NumpyMLP(artifact_dir / "dynamics_model.npz")
+        dyn_pred = dynamics(normalizer.transform(dyn_x))
+        print(f"Dynamics MSE: {mse(dyn_pred, dyn_y):.6f}")
+
+    if (artifact_dir / "policy_model.npz").exists() and len(pol_x):
+        policy = NumpyMLP(artifact_dir / "policy_model.npz")
+        pol_pred = policy(normalizer.transform(pol_x))
+        print(f"Policy imitation MSE: {mse(pol_pred, pol_y):.6f}")
+        print(f"Mean policy disagreement: {float(np.mean(np.linalg.norm(pol_pred - pol_y, axis=1))):.6f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

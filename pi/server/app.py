@@ -49,14 +49,23 @@ HTML = """
         <button onclick="sendCommand('STOP')">Stop</button>
         <button onclick="sendCommand('RECALIBRATE')">Recalibrate</button>
       </div>
+      <div class="buttons">
+        <button onclick="setControllerMode('legacy')">Legacy</button>
+        <button onclick="setControllerMode('nn_shadow')">NN Shadow</button>
+        <button onclick="setControllerMode('nn_assist')">NN Assist</button>
+        <button onclick="setControllerMode('nn_primary')">NN Primary</button>
+      </div>
     </div>
     <div class="card">
       <div class="stat"><span class="muted">Runtime</span><span id="runtime-state">--</span></div>
+      <div class="stat"><span class="muted">Controller</span><span id="controller-mode">--</span></div>
       <div class="stat"><span class="muted">Ball Found</span><span id="ball-found">--</span></div>
       <div class="stat"><span class="muted">Ball Position</span><span id="ball-pos">--</span></div>
       <div class="stat"><span class="muted">Ball Velocity</span><span id="ball-vel">--</span></div>
       <div class="stat"><span class="muted">Confidence</span><span id="ball-conf">--</span></div>
       <div class="stat"><span class="muted">Tilt</span><span id="tilt">--</span></div>
+      <div class="stat"><span class="muted">NN Status</span><span id="nn-status">--</span></div>
+      <div class="stat"><span class="muted">NN Inference</span><span id="nn-latency">--</span></div>
       <div class="stat"><span class="muted">FPS</span><span id="fps">--</span></div>
       <div class="stat"><span class="muted">Calibration</span><span id="calibration">--</span></div>
     </div>
@@ -67,6 +76,15 @@ HTML = """
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({command})
+      });
+      refresh();
+    }
+
+    async function setControllerMode(mode) {
+      await fetch('/api/controller-mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode})
       });
       refresh();
     }
@@ -97,11 +115,16 @@ HTML = """
       const snap = payload.snapshot;
       document.getElementById('mode').textContent = snap.mode;
       document.getElementById('runtime-state').textContent = snap.mode;
+      document.getElementById('controller-mode').textContent = snap.controller_mode || 'legacy';
       document.getElementById('ball-found').textContent = snap.ball.found ? 'Yes' : 'No';
       document.getElementById('ball-pos').textContent = fmtPair(snap.ball.center_norm, 3);
       document.getElementById('ball-vel').textContent = fmtPair(snap.ball.velocity_norm, 2);
       document.getElementById('ball-conf').textContent = Number(snap.ball.confidence || 0).toFixed(2);
       document.getElementById('tilt').textContent = fmtPair([snap.control.tilt_x, snap.control.tilt_y], 2);
+      document.getElementById('nn-status').textContent =
+        snap.neural.active ? `active (${snap.neural.mode})` :
+        (snap.neural.fallback_reason ? `fallback: ${snap.neural.fallback_reason}` : snap.neural.mode || 'legacy');
+      document.getElementById('nn-latency').textContent = `${Number(snap.neural.inference_ms || 0).toFixed(2)} ms`;
       document.getElementById('fps').textContent = Number(snap.fps || 0).toFixed(1);
       document.getElementById('calibration').textContent = `${Math.round((snap.board.progress || 0) * 100)}%`;
       document.getElementById('raw').src = snap.raw_frame_b64 ? `data:image/jpeg;base64,${snap.raw_frame_b64}` : '';
@@ -134,6 +157,13 @@ def state():
 def command():
     payload = request.get_json(force=True)
     response = client.request({"action": payload.get("command", "")})
+    return jsonify(response)
+
+
+@app.post("/api/controller-mode")
+def controller_mode():
+    payload = request.get_json(force=True)
+    response = client.request({"action": "SET_CONTROLLER_MODE", "mode": payload.get("mode", "legacy")})
     return jsonify(response)
 
 

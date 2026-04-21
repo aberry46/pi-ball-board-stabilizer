@@ -4,19 +4,20 @@ import json
 import socketserver
 import threading
 from queue import Empty, Queue
+from typing import Any
 
 from .models import RuntimeSnapshot
 
 
 class RuntimeCommandQueue:
     def __init__(self) -> None:
-        self._queue: Queue[str] = Queue()
+        self._queue: Queue[dict[str, Any]] = Queue()
 
-    def put(self, command: str) -> None:
+    def put(self, command: dict[str, Any]) -> None:
         self._queue.put(command)
 
-    def drain(self) -> list[str]:
-        items: list[str] = []
+    def drain(self) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
         while True:
             try:
                 items.append(self._queue.get_nowait())
@@ -47,8 +48,12 @@ class _Handler(socketserver.StreamRequestHandler):
         action = payload.get("action", "")
 
         if action in {"RUN", "PAUSE", "STOP", "RECALIBRATE"}:
-            self.server.command_queue.put(action)  # type: ignore[attr-defined]
+            self.server.command_queue.put({"action": action})  # type: ignore[attr-defined]
             response = {"ok": True, "accepted": action}
+        elif action == "SET_CONTROLLER_MODE":
+            mode = payload.get("mode", "")
+            self.server.command_queue.put({"action": action, "mode": mode})  # type: ignore[attr-defined]
+            response = {"ok": True, "accepted": action, "mode": mode}
         elif action == "GET_STATE":
             response = {"ok": True, "snapshot": self.server.snapshot_store.get().to_dict()}  # type: ignore[attr-defined]
         elif action == "PING":

@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+import json
+import os
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 
@@ -52,6 +54,19 @@ class RuntimeConfig:
     serial_timeout_s: float = 0.1
     command_keepalive_s: float = 0.20
 
+    controller_mode: str = "legacy"
+    nn_history_steps: int = 8
+    nn_dynamics_horizon: int = 5
+    nn_policy_artifact_path: Path = Path("artifacts/nn/policy_model.npz")
+    nn_dynamics_artifact_path: Path = Path("artifacts/nn/dynamics_model.npz")
+    nn_normalization_path: Path = Path("artifacts/nn/normalization.json")
+    nn_max_inference_ms: float = 20.0
+    nn_min_ball_confidence: float = 0.75
+    nn_near_edge_margin: float = 0.08
+    nn_assist_blend: float = 0.35
+    nn_assist_max_delta: float = 0.18
+    nn_primary_max_delta: float = 0.35
+
     ipc_host: str = "127.0.0.1"
     ipc_port: int = 8765
 
@@ -62,3 +77,26 @@ class RuntimeConfig:
     disable_preview_while_running: bool = True
     preview_max_width: int = 480
     preview_dir: Path = Path("/tmp/pi_ball_board_stabilizer")
+    control_log_dir: Path = Path("runtime_data/control_logs")
+    system_id_dir: Path = Path("runtime_data/system_id")
+    local_override_path: Path = Path("runtime_data/local_runtime_config.json")
+
+    @classmethod
+    def load(cls) -> "RuntimeConfig":
+        base = cls()
+        override_path = Path(os.environ.get("PI_BALL_RUNTIME_CONFIG", str(base.local_override_path)))
+        if not override_path.exists():
+            return base
+
+        payload = json.loads(override_path.read_text(encoding="utf-8"))
+        valid_fields = {entry.name: entry for entry in fields(cls)}
+        updates = {}
+        for key, value in payload.items():
+            if key not in valid_fields:
+                continue
+            field_info = valid_fields[key]
+            if field_info.type is Path:
+                updates[key] = Path(value)
+            else:
+                updates[key] = value
+        return cls(**{**base.__dict__, **updates})

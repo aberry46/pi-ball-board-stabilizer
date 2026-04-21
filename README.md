@@ -26,6 +26,7 @@ Hold a red ball near the center of the board for several seconds under normal te
 - `pi/runtime`: authoritative Pi control loop
 - `pi/server`: observer UI and command surface
 - `arduino/firmware`: thin servo executor firmware
+- `nn_training`: offline neural-model training utilities
 - `docs`: design notes and operating guidance
 
 ## Running
@@ -59,6 +60,82 @@ To pull the latest code from GitHub and restart both services in one step:
 ```
 
 If a repo virtualenv exists at `.venv`, the scripts will use it automatically.
+
+## Neural Control Workflow
+
+The runtime now supports four controller modes through `pi/runtime/config.py`:
+
+- `legacy`: deterministic controller only
+- `nn_shadow`: run neural inference, log telemetry, do not affect commands
+- `nn_assist`: bounded neural correction blended with the legacy controller
+- `nn_primary`: neural pilot with hard safety fallback
+
+For Pi-local overrides that should not be committed, create:
+
+- `runtime_data/local_runtime_config.json`
+
+The runtime loads that file automatically at startup. A sample is in:
+
+- `docs/local-runtime-config.example.json`
+
+### Control Logging
+
+Each runtime session can write replay-quality JSONL traces under:
+
+- `runtime_data/control_logs/`
+
+Those traces include:
+
+- ball state
+- confidence
+- control command
+- controller mode
+- NN telemetry
+- board calibration snapshot
+
+### System Identification
+
+To collect scripted X/Y pulse traces on the Pi:
+
+```bash
+PYTHONPATH=. ./.venv/bin/python scripts/collect_system_id.py
+```
+
+This saves pulse-response traces under:
+
+- `runtime_data/system_id/`
+
+### Train Dynamics and Policy Models
+
+From the repo root:
+
+```bash
+PYTHONPATH=. python scripts/train_dynamics_model.py --data runtime_data/control_logs
+PYTHONPATH=. python scripts/train_policy_model.py --data runtime_data/control_logs
+```
+
+Artifacts are written by default to:
+
+- `artifacts/nn/dynamics_model.npz`
+- `artifacts/nn/policy_model.npz`
+- `artifacts/nn/normalization.json`
+
+### Evaluate Trained Models
+
+```bash
+PYTHONPATH=. python scripts/evaluate_nn_models.py --data runtime_data/control_logs
+```
+
+### Live Mode Switching
+
+The observer UI now includes controller-mode buttons for:
+
+- `legacy`
+- `nn_shadow`
+- `nn_assist`
+- `nn_primary`
+
+That lets you switch live runtime mode without editing config files or restarting the process.
 
 ## First Pi Bring-Up
 

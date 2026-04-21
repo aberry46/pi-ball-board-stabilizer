@@ -17,3 +17,6 @@ Thumbs.db
 ball_calibration_report.json
 ball_calibration_report.txt
 .run/
+artifacts/
+runtime_data/
+captures/

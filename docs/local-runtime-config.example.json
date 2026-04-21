@@ -1,0 +1,7 @@
+{
+  "serial_port": "/dev/ttyACM0",
+  "controller_mode": "legacy",
+  "nn_policy_artifact_path": "artifacts/nn/policy_model.npz",
+  "nn_dynamics_artifact_path": "artifacts/nn/dynamics_model.npz",
+  "nn_normalization_path": "artifacts/nn/normalization.json"
+}
