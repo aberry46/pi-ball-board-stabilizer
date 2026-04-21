@@ -58,6 +58,8 @@ To pull the latest code from GitHub and restart both services in one step:
 ./scripts/update_and_restart.sh
 ```
 
+If a repo virtualenv exists at `.venv`, the scripts will use it automatically.
+
 ## First Pi Bring-Up
 
 1. Install Python dependencies from `requirements.txt`
