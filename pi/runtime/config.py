@@ -37,7 +37,7 @@ class RuntimeConfig:
     lost_track_grace_s: float = 0.10
 
     swap_control_axes: bool = False
-    invert_control_x: bool = False
+    invert_control_x: bool = True
     invert_control_y: bool = True
 
     serial_port: str = "/dev/ttyACM1"
