@@ -9,7 +9,7 @@ ensure_run_dir
 PYTHON_BIN="$(python_bin)"
 
 echo "[start_all_pi] stopping stale processes first"
-"$ROOT_DIR/scripts/stop_all_pi.sh"
+bash "$ROOT_DIR/scripts/stop_all_pi.sh"
 
 echo "[start_all_pi] launching runtime in background"
 nohup "$PYTHON_BIN" -m pi.runtime.main > "$ROOT_DIR/.run/runtime.log" 2>&1 &

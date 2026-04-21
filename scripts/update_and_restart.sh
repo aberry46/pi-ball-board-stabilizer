@@ -22,7 +22,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 echo "[update_and_restart] stopping running services"
-"$ROOT_DIR/scripts/stop_all_pi.sh"
+bash "$ROOT_DIR/scripts/stop_all_pi.sh"
 
 echo "[update_and_restart] fetching latest changes"
 git fetch origin "$BRANCH"
@@ -38,6 +38,6 @@ else
 fi
 
 echo "[update_and_restart] restarting services"
-"$ROOT_DIR/scripts/start_all_pi.sh"
+bash "$ROOT_DIR/scripts/start_all_pi.sh"
 
 echo "[update_and_restart] complete"
