@@ -24,16 +24,16 @@ class RuntimeConfig:
     max_blob_area_ratio: float = 0.09
     min_confidence: float = 0.20
 
-    kp_x: float = 2.0
-    kp_y: float = 2.0
-    kd_x: float = 0.50
-    kd_y: float = 0.50
+    kp_x: float = 1.2
+    kp_y: float = 1.2
+    kd_x: float = 0.20
+    kd_y: float = 0.20
     max_tilt: float = 1.0
-    min_tilt: float = 0.08
-    deadband: float = 0.02
-    catch_velocity_threshold: float = 0.45
-    catch_error_threshold: float = 0.16
-    catch_multiplier: float = 1.35
+    min_tilt: float = 0.00
+    deadband: float = 0.05
+    catch_velocity_threshold: float = 0.80
+    catch_error_threshold: float = 0.28
+    catch_multiplier: float = 1.10
     lost_track_grace_s: float = 0.35
 
     serial_port: str = "/dev/ttyACM0"
